@@ -1,0 +1,78 @@
+---
+title: 'code3'
+author: "jingxuan song"
+date: "`r Sys.Date()`"
+output: html_document
+---
+```{r}
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(palmerpenguins)
+  library(tidymodels)
+})
+```
+
+
+```{r}
+spanish <-read_csv("Spanish.csv",show_col_types = FALSE)
+spanish = subset(spanish,select = -c(nationality,ID))
+spanish$emotion = as.factor(spanish$emotion)
+```
+
+```{r}
+spanish <- spanish %>% 
+  drop_na()
+
+spanish %>% 
+  anyNA()
+```
+
+
+
+```{r}
+#install.packages("caret")
+library(caret)
+```
+
+```{r}
+set.seed(2056)
+
+# Split data 70%-30% into training set and test set
+spanish_split <- spanish %>% 
+  initial_split(prop = 0.70, strata = emotion)
+
+# Extract data in each split
+spanish_train <- training(spanish_split)
+spanish_test <- testing(spanish_split)
+dim(spanish_train)
+dim(spanish_test)
+```
+```{r}
+summary(spanish)
+
+```
+
+```{r}
+trctrl <- trainControl(method = "repeatedcv", number = 5,repeats = 10)
+set.seed(3333)
+knn_fit <- train(emotion ~., data = spanish_train, method = "knn",
+ trControl=trctrl,
+ preProcess = c("center", "scale"),
+ tuneLength = 10)
+```
+
+```{r}
+knn_fit
+```
+```{r}
+plot(knn_fit)
+```
+```{r}
+test_pred <- predict(knn_fit, newdata = spanish_test)
+test_pred
+```
+
+```{r}
+confusionMatrix(test_pred, spanish_test$emotion)
+
+```

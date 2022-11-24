@@ -1,0 +1,279 @@
+---
+author: "jingxuan song"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r}
+library(ggplot2)
+library(patchwork)
+library(readr)
+library(MASS)
+library(caTools)
+library(mlr3verse)
+#install.packages("iml")
+library(iml)
+library(mlr3)
+library(mlr3learners)
+library(dplyr)
+library(tidyverse)
+```
+
+```{r}
+
+library(parallel)
+detectCores()
+cores = detectCores() - 1
+
+```
+
+```{r}
+library(future)
+plan("multisession",workers = cores)
+set.seed(312,kind = "L'Ecuyer-CMRG")
+
+```
+
+```{r}
+english <-read_csv("English.csv",show_col_types = FALSE)
+english = subset(english,select = -c(nationality,ID))
+english$emotion = as.factor(english$emotion)
+```
+
+```{r}
+#install.packages("Boruta")
+library(Boruta)
+# Decide if a variable is important or not using Boruta
+english_1 = english %>% drop_na()
+set.seed(2022)
+boruta_english_train <- Boruta(emotion ~ . , data= english_1, doTrace=2) # perform Boruta search
+print(boruta_english_train)
+
+boruta_english <- TentativeRoughFix(boruta_english_train)
+print(boruta_english)
+boruta_signif <- names(boruta_english_train$finalDecision[boruta_english_train$finalDecision %in% c("Confirmed", "Tentative")]) # collect Confirmed and Tentative variables
+print(boruta_signif)
+plot(boruta_english, xlab = "", xaxt = "n")
+lz<-lapply(1:ncol(boruta_english$ImpHistory),function(i)
+boruta_english$ImpHistory[is.finite(boruta_english$ImpHistory[,i]),i])
+names(lz) <- colnames(boruta_english$ImpHistory)
+Labels <- sort(sapply(lz,median))
+axis(side = 1,las=2,labels = names(Labels),
+at = 1:ncol(boruta_english$ImpHistory), cex.axis = 0.7)
+```
+```{r}
+library(rpart.plot)
+library(mlr3verse)
+library(DALEXtra)
+library(ggplot2)
+
+task_english_0 <- TaskClassif$new(id = "English", backend = english_1, 
+  target = "emotion")
+set.seed(2022)
+rf_classif <- lrn("classif.ranger", num.trees = 500, 
+  predict_type = "prob")
+rf_classif$train(task_english_0)
+
+rf_exp_english <- explain_mlr3(rf_classif, 
+  data = english_1,
+  y = english_1$emotion, 
+  label = "ranger explainer english", colorize = FALSE)
+
+varimp_english <- model_parts(rf_exp_english,
+  type = "difference")
+plot(varimp_english, show_boxplots = TRUE)
+
+variable_importance = as.data.frame(varimp_english)
+variable_importance = variable_importance[order(variable_importance$dropout_loss, decreasing = TRUE),]
+
+head(unique(variable_importance$variable),11)
+```
+
+```{r}
+# Task definition
+task_english = TaskClassif$new(id = "English", backend = english, 
+  target = "emotion")
+imputer = po("imputemedian")
+rdesc = rsmp("repeated_cv", repeats = 10,folds = 5)
+mes = msrs(c("classif.ce","classif.acc"))
+```
+
+
+```{r}
+# Featureless
+featureless = lrn("classif.featureless",predict_type = "prob") 
+featureless = as_learner(imputer %>>% featureless)
+set.seed(2022)
+res_featureless = resample(learner = featureless, task = task_english, resampling = rdesc)
+
+res_featureless$prediction()$confusion
+
+print('Featureless');print(res_featureless$aggregate(mes))
+```
+
+```{r}
+# Penalized Generalized Linear Models
+
+library(rpart.plot)
+library(paradox)
+library(future)
+library(parallel)
+detectCores()
+cores = detectCores() - 1 # save one core to keep the computer operational
+library(future)
+plan("multisession", workers = cores)
+lasso = lrn("classif.cv_glmnet", s = "lambda.min", alpha = 1)
+lasso = as_learner(imputer %>>% lasso)
+set.seed(2022)
+res_lasso = resample(learner = lasso, task = task_english, resampling = rdesc)
+
+res_lasso$prediction()$confusion
+print('Lasso');print(res_lasso$aggregate(mes))
+#autoplot(res, measure = msr("classif.acc"))
+
+```
+
+
+
+```{r}
+# Single classification tree
+library(parallel)
+detectCores()
+cores = detectCores() - 1 # save one core to keep the computer operational
+library(future)
+plan("multisession", workers = cores)
+
+tree = lrn("classif.rpart") 
+tree = as_learner(imputer %>>% tree)
+
+set.seed(2022)
+res_tree = resample(learner = tree, task = task_english, resampling = rdesc)
+
+res_tree$prediction()$confusion
+print('Single Classification Tree');print(res_tree$aggregate(mes))
+```
+
+```{r}
+# Random Forest
+library(parallel)
+detectCores()
+cores = detectCores() - 1 # save one core to keep the computer operational
+library(future)
+plan("multisession", workers = cores)
+
+rf = lrn("classif.ranger",num.trees = 500) 
+rf = as_learner(imputer %>>% rf) 
+set.seed(2022)
+res_rf = resample(learner = rf, task = task_english, resampling = rdesc)
+
+res_rf$prediction()$confusion
+print('Random Forest');print(res_rf$aggregate(mes))
+```
+
+
+```{r}
+# K-Nearest Neighbors
+#install.packages("kknn")
+library(parallel)
+detectCores()
+cores = detectCores() - 1 # save one core to keep the computer operational
+library(future)
+plan("multisession", workers = cores)
+library(kknn)
+knn = lrn("classif.kknn") 
+knn = as_learner(imputer %>>% knn)
+
+set.seed(2022)
+res_knn= resample(learner = knn, task = task_english, resampling = rdesc)
+
+res_knn$prediction()$confusion
+print('K-Nearest Neighbors');print(res_knn$aggregate(mes))
+```
+
+```{r}
+# Naive Bayes Classification
+library(parallel)
+detectCores()
+cores = detectCores() - 1 # save one core to keep the computer operational
+library(future)
+plan("multisession", workers = cores)
+nb = lrn("classif.naive_bayes") 
+nb = as_learner(imputer %>>% nb)
+
+set.seed(2022)
+res_nb= resample(learner = nb, task = task_english, resampling = rdesc)
+
+res_nb$prediction()$confusion
+print('Naive Bayes Classification');print(res_nb$aggregate(mes))
+```
+
+```{r}
+# Neural Network
+#install.packages("nnet")
+library(parallel)
+detectCores()
+cores = detectCores() - 1 # save one core to keep the computer operational
+library(future)
+plan("multisession", workers = cores)
+library(nnet)
+nn = lrn("classif.nnet") 
+nn = as_learner(imputer %>>% nn)
+
+set.seed(2022)
+res_nn= resample(learner = nn, task = task_english, resampling = rdesc)
+
+
+res_nn$prediction()$confusion
+print('Neural Network');print(res_nn$aggregate(mes))
+```
+
+```{r}
+
+library(parallel)
+detectCores()
+cores = detectCores() - 1 # save one core to keep the computer operational
+library(future)
+
+plan("multisession", workers = cores)
+set.seed(2022)
+
+design_classif = benchmark_grid(
+  tasks = task_english,
+  learners = list(featureless, lasso, tree, rf, knn, nb, nn),
+  resamplings = rdesc)
+bm_classif = benchmark(design_classif)
+plan('sequential')
+autoplot(bm_classif, measure = msr("classif.acc"))
+```
+
+ from the best model, visualize variable importance measure 
+
+```{r}
+library(rpart.plot)
+library(mlr3verse)
+library(DALEXtra)
+library(ggplot2)
+
+set.seed(2022)
+tree_classif <- lrn("classif.ranger", num.trees = 500, 
+  predict_type = "prob")
+tree_classif$train(task_english_0)
+
+tree_exp_english <- explain_mlr3(tree_classif, 
+  data = english_1,
+  y = english_1$emotion, 
+  label = "ranger explainer english", colorize = FALSE)
+
+varimp_english_tree <- model_parts(tree_exp_english,
+  type = "difference")
+plot(varimp_english_tree, show_boxplots = TRUE)
+```
+
+```{r}
+variable_importance_tree = as.data.frame(varimp_english_tree)
+variable_importance_tree = variable_importance_tree[order(variable_importance_tree$dropout_loss, decreasing = TRUE),]
+
+head(unique(variable_importance_tree$variable),11)
+
+```
+

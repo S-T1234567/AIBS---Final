@@ -1,0 +1,171 @@
+---
+title: "AIBS"
+author: "jingxuan song"
+date: "`r Sys.Date()`"
+output: html_document
+---
+```{r}
+install.packages(c("mlr3verse", "parallel", "future", "mlr3learners", "glmnet", "ranger", "ggplot2", "patchwork", "readr", "MASS", "caTools", "rpart.plot", "paradox", "DALEXtra"))
+```
+
+```{r}
+library(ggplot2)
+library(patchwork)
+library(readr)
+library(MASS)
+library(caTools)
+```
+
+```{r}
+#setwd("~/Desktop/R")
+english <-read_csv("English.csv")
+english = subset(english,select = -c(nationality,ID))
+summary(english)
+show(english)
+na_count <-sapply(english, function(y) sum(length(which(is.na(y)))))
+na_count
+```
+
+```{r}
+#install.packages("tidyverse")
+library(tidyverse)
+```
+```{r}
+set.seed(1234)
+library(tidymodels)
+english_split <- initial_split(english, strata = emotion)
+english_train <- training(english_split)
+english_test <- testing(english_split)
+
+```
+
+```{r}
+english_train %>%
+  count(emotion, sort = TRUE) %>%
+  select(n, emotion)
+```
+```{r}
+#There are many different ways to deal with imbalanced data. We will demonstrate one of the simplest methods, downsampling, where observations from the majority classes are removed during training to achieve a balanced class distribution. We will be using the themis (Hvitfeldt 2020d) add-on package for recipes which provides the step_downsample() function to perform downsampling.
+
+library(themis)
+
+english_rec <-
+  recipe(emotion ~ .,
+         data = english_train)
+
+english_folds <- vfold_cv(english_train)
+```
+
+
+```{r}
+library(hardhat)
+sparse_bp <- default_recipe_blueprint(composition = "dgCMatrix")
+
+multi_spec <- multinom_reg(penalty = tune(), mixture = 1) %>%
+  set_mode("classification") %>%
+  set_engine("glmnet")
+
+multi_spec
+
+multi_lasso_wf <- workflow() %>%
+  add_recipe(english_rec, blueprint = sparse_bp) %>%
+  add_model(multi_spec)
+
+multi_lasso_wf
+```
+```{r}
+smaller_lambda <- grid_regular(penalty(range = c(-5, 0)), levels = 20)
+smaller_lambda
+
+multi_lasso_rs <- tune_grid(
+  multi_lasso_wf,
+  english_folds,
+  grid = smaller_lambda,
+  control = control_resamples(save_pred = TRUE)
+)
+```
+```{r}
+best_acc <- multi_lasso_rs %>%
+  show_best("accuracy")
+
+best_acc
+
+
+```
+
+```{r}
+multi_lasso_rs %>%
+  collect_predictions() %>%
+  filter(penalty == best_acc$penalty) %>%
+  filter(id == "Fold01") %>%
+  conf_mat(emotion, .pred_class) %>%
+  autoplot(type = "heatmap") +
+  scale_y_discrete(labels = function(x) str_wrap(x, 20)) +
+  scale_x_discrete(labels = function(x) str_wrap(x, 20))
+```
+
+```{r}
+multi_lasso_rs %>%
+  collect_predictions() %>%
+  filter(penalty == best_acc$penalty) %>%
+  filter(id == "Fold01") %>%
+  filter(.pred_class != emotion) %>%
+  conf_mat(emotion, .pred_class) %>%
+  autoplot(type = "heatmap") +
+  scale_y_discrete(labels = function(x) str_wrap(x, 20)) +
+  scale_x_discrete(labels = function(x) str_wrap(x, 20))
+```
+```{r}
+english_rec_v2 <-
+  recipe(emotion ~ ., data = english_train)
+
+
+```
+
+```{r}
+#correlation - does not work as there are too many features
+
+#library(ggcorrplot)
+#english_corr = subset(english, select=-c(nationality,ID))
+#corr <- round(cor(english_corr,use = "complete.obs"), 1)
+#ggcorrplot(corr, lab=TRUE)
+```
+
+
+```{r}
+library(mlr3verse)
+mes=msrs(c("classif.ce","classif.acc","classif.sensitivity","classif.specificity"))
+task_english = as_task_classif(x = english, id = "English", target = "emotion")
+imputer = po("imputemedian")
+```
+
+```{r}
+install.packages("xgboost")
+
+library(xgboost)  # the main algorithm
+#library("archdata") # for the sample dataset
+library("caret")    # for the confusionmatrix() function (also needs e1071 package)
+library("dplyr")    # for some data preperation
+#library("Ckmeans.1d.dp") # for xgb.ggplot.importance
+```
+
+```{r}
+#benchmark
+featureless = lrn("classif.featureless")
+featureless = as_learner(imputer %>>% featureless)
+featureless$train(task_english)
+prediction_featureless = featureless$predict(task_english)
+prediction_featureless$score(mes)
+```
+
+```{r}
+rdesc = rsmp("cv", folds = 5)
+rf = lrn("classif.rpart")
+rf = as_learner(imputer %>>% rf)
+library(mlr3pipelines)
+rf = po("encode") %>>% rf
+res_rf = resample(learner = rf, task = task_english, resampling = rdesc)
+res_rf$aggregate(mes)
+
+#In practice, R2 will be negative whenever your model's predictions are worse than a constant function that always predicts the mean of the data.
+```

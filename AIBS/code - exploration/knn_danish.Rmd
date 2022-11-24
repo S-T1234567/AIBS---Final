@@ -1,0 +1,78 @@
+---
+title: 'code3'
+author: "jingxuan song"
+date: "`r Sys.Date()`"
+output: html_document
+---
+```{r}
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(palmerpenguins)
+  library(tidymodels)
+})
+```
+
+
+```{r}
+danish <-read_csv("Danish.csv",show_col_types = FALSE)
+danish = subset(danish,select = -c(nationality,ID))
+danish$emotion = as.factor(danish$emotion)
+```
+
+```{r}
+danish <- danish %>% 
+  drop_na()
+
+danish %>% 
+  anyNA()
+```
+
+
+
+```{r}
+#install.packages("caret")
+library(caret)
+```
+
+```{r}
+set.seed(2056)
+
+# Split data 70%-30% into training set and test set
+danish_split <- danish %>% 
+  initial_split(prop = 0.70, strata = emotion)
+
+# Extract data in each split
+danish_train <- training(danish_split)
+danish_test <- testing(danish_split)
+dim(danish_train)
+dim(danish_test)
+```
+```{r}
+summary(danish)
+
+```
+
+```{r}
+trctrl <- trainControl(method = "repeatedcv", number = 5,repeats = 10)
+set.seed(3333)
+knn_fit <- train(emotion ~., data = danish_train, method = "knn",
+ trControl=trctrl,
+ preProcess = c("center", "scale"),
+ tuneLength = 10)
+```
+
+```{r}
+knn_fit
+```
+```{r}
+plot(knn_fit)
+```
+```{r}
+test_pred <- predict(knn_fit, newdata = danish_test)
+test_pred
+```
+
+```{r}
+confusionMatrix(test_pred, danish_test$emotion)
+
+```

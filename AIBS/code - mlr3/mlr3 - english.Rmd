@@ -246,7 +246,7 @@ plan('sequential')
 autoplot(bm_classif, measure = msr("classif.acc"))
 ```
 
- from the best model, visualize variable importance measure 
+ from random forest model, visualize variable importance measure 
 
 ```{r}
 library(rpart.plot)
@@ -275,5 +275,9 @@ variable_importance_tree = variable_importance_tree[order(variable_importance_tr
 
 head(unique(variable_importance_tree$variable),11)
 
+```
+
+```{r}
+saveRDS()
 ```
 

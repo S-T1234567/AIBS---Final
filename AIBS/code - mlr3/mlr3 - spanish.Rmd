@@ -61,6 +61,7 @@ Labels <- sort(sapply(lz,median))
 axis(side = 1,las=2,labels = names(Labels),
 at = 1:ncol(boruta_spanish$ImpHistory), cex.axis = 0.7)
 ```
+
 ```{r}
 library(rpart.plot)
 library(mlr3verse)
@@ -244,35 +245,4 @@ design_classif = benchmark_grid(
 bm_classif = benchmark(design_classif)
 plan('sequential')
 autoplot(bm_classif, measure = msr("classif.acc"))
-```
-
- from the best model, visualize variable importance measure 
-
-```{r}
-library(rpart.plot)
-library(mlr3verse)
-library(DALEXtra)
-library(ggplot2)
-
-set.seed(2022)
-tree_classif <- lrn("classif.ranger", num.trees = 500, 
-  predict_type = "prob")
-tree_classif$train(task_spanish_0)
-
-tree_exp_spanish <- explain_mlr3(tree_classif, 
-  data = spanish_1,
-  y = spanish_1$emotion, 
-  label = "ranger explainer spanish", colorize = FALSE)
-
-varimp_spanish_tree <- model_parts(tree_exp_spanish,
-  type = "difference")
-plot(varimp_spanish_tree, show_boxplots = TRUE)
-```
-
-```{r}
-variable_importance_tree = as.data.frame(varimp_spanish_tree)
-variable_importance_tree = variable_importance_tree[order(variable_importance_tree$dropout_loss, decreasing = TRUE),]
-
-head(unique(variable_importance_tree$variable),11)
-
 ```

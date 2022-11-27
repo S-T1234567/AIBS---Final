@@ -38,13 +38,13 @@ set.seed(312,kind = "L'Ecuyer-CMRG")
 english <-read_csv("English.csv",show_col_types = FALSE)
 english = subset(english,select = -c(nationality,ID))
 english$emotion = as.factor(english$emotion)
+english_1 = english %>% drop_na()
 ```
 
 ```{r}
 #install.packages("Boruta")
 library(Boruta)
 # Decide if a variable is important or not using Boruta
-english_1 = english %>% drop_na()
 set.seed(2022)
 boruta_english_train <- Boruta(emotion ~ . , data= english_1, doTrace=2) # perform Boruta search
 print(boruta_english_train)
@@ -67,7 +67,7 @@ library(mlr3verse)
 library(DALEXtra)
 library(ggplot2)
 
-task_english_0 <- TaskClassif$new(id = "English", backend = english_1, 
+task_english_0 <- TaskClassif$new(id = "english", backend = english_1, 
   target = "emotion")
 set.seed(2022)
 rf_classif <- lrn("classif.ranger", num.trees = 500, 
@@ -77,12 +77,15 @@ rf_classif$train(task_english_0)
 rf_exp_english <- explain_mlr3(rf_classif, 
   data = english_1,
   y = english_1$emotion, 
-  label = "ranger explainer english", colorize = FALSE)
+  label = "ranger explainer spanish", colorize = FALSE)
 
 varimp_english <- model_parts(rf_exp_english,
   type = "difference")
 plot(varimp_english, show_boxplots = TRUE)
 
+```
+
+```{r}
 variable_importance = as.data.frame(varimp_english)
 variable_importance = variable_importance[order(variable_importance$dropout_loss, decreasing = TRUE),]
 
@@ -243,36 +246,8 @@ design_classif = benchmark_grid(
   resamplings = rdesc)
 bm_classif = benchmark(design_classif)
 plan('sequential')
+autoplot(bm_classif, measure = msr("classif.ce"))
+```
+```{r}
 autoplot(bm_classif, measure = msr("classif.acc"))
-```
-
- from random forest model, visualize variable importance measure 
-
-```{r}
-library(rpart.plot)
-library(mlr3verse)
-library(DALEXtra)
-library(ggplot2)
-
-set.seed(2022)
-tree_classif <- lrn("classif.ranger", num.trees = 500, 
-  predict_type = "prob")
-tree_classif$train(task_english_0)
-
-tree_exp_english <- explain_mlr3(tree_classif, 
-  data = english_1,
-  y = english_1$emotion, 
-  label = "ranger explainer english", colorize = FALSE)
-
-varimp_english_tree <- model_parts(tree_exp_english,
-  type = "difference")
-plot(varimp_english_tree, show_boxplots = TRUE)
-```
-
-```{r}
-variable_importance_tree = as.data.frame(varimp_english_tree)
-variable_importance_tree = variable_importance_tree[order(variable_importance_tree$dropout_loss, decreasing = TRUE),]
-
-head(unique(variable_importance_tree$variable),11)
-
 ```

@@ -246,33 +246,3 @@ plan('sequential')
 autoplot(bm_classif, measure = msr("classif.acc"))
 ```
 
- from the best model, visualize variable importance measure 
-
-```{r}
-library(rpart.plot)
-library(mlr3verse)
-library(DALEXtra)
-library(ggplot2)
-
-set.seed(2022)
-tree_classif <- lrn("classif.ranger", num.trees = 500, 
-  predict_type = "prob")
-tree_classif$train(task_danish_0)
-
-tree_exp_danish <- explain_mlr3(tree_classif, 
-  data = danish_1,
-  y = danish_1$emotion, 
-  label = "ranger explainer danish", colorize = FALSE)
-
-varimp_danish_tree <- model_parts(tree_exp_danish,
-  type = "difference")
-plot(varimp_danish_tree, show_boxplots = TRUE)
-```
-
-```{r}
-variable_importance_tree = as.data.frame(varimp_danish_tree)
-variable_importance_tree = variable_importance_tree[order(variable_importance_tree$dropout_loss, decreasing = TRUE),]
-
-head(unique(variable_importance_tree$variable),11)
-
-```

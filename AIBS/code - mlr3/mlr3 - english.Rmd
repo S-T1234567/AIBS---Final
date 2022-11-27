@@ -276,8 +276,3 @@ variable_importance_tree = variable_importance_tree[order(variable_importance_tr
 head(unique(variable_importance_tree$variable),11)
 
 ```
-
-```{r}
-saveRDS()
-```
-

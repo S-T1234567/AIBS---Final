@@ -1,5 +1,5 @@
 ---
-title: "code 2"
+title: "english"
 author: "jingxuan song"
 date: "`r Sys.Date()`"
 output: html_document
@@ -8,7 +8,6 @@ output: html_document
 #install.packages("kernlab")
 suppressPackageStartupMessages({
   library(tidyverse)
-  library(palmerpenguins)
   library(tidymodels)
 })
 english <-read_csv("English.csv",show_col_types = FALSE)
@@ -252,11 +251,13 @@ library(here)
 saveRDS(english_svm_model, "english_svm_model.rds")
 ```
 
+
 ```{r}
 chinese <-read_csv("Chinese.csv",show_col_types = FALSE)
 chinese = subset(chinese,select = -c(nationality,ID))
 chinese$emotion = as.factor(chinese$emotion)
 ```
+
 ```{r}
 loaded_psvm_model <- readRDS("english_svm_model.rds") 
 ```

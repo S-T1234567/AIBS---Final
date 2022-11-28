@@ -246,3 +246,199 @@ plan('sequential')
 autoplot(bm_classif, measure = msr("classif.acc"))
 ```
 
+```{r}
+library(mlr3verse)
+library(rpart.plot)
+library(paradox)
+library(future)
+set.seed(2022)
+learner = lrn("classif.rpart",
+  cp        = to_tune(0.01,0.1),
+  minsplit  = to_tune(2, 20),
+  maxdepth  = to_tune(10,20)
+)
+
+at = auto_tuner(
+  method = tnr("random_search"),
+  learner = learner,
+  resampling = rsmp("cv", folds = 3),
+  measure = msr("classif.acc"),
+  terminator = trm("evals", n_evals = 20)
+)
+
+task = task_danish
+outer_resampling = rsmp("cv", folds = 3)
+
+rr = resample(task, at, outer_resampling, store_models = TRUE)
+extract_inner_tuning_results(rr)
+rr$aggregate()
+at$train(task_danish)
+```
+
+
+```{r}
+saveRDS(at,"tree_danish.rds")
+chinese <-read_csv("Chinese.csv",show_col_types = FALSE)
+chinese = subset(chinese,select = -c(nationality,ID))
+chinese$emotion = as.factor(chinese$emotion)
+```
+
+```{r}
+loaded_tuned_model <- readRDS("tree_danish.rds") 
+```
+
+```{r}
+chinese <- chinese %>% 
+  drop_na()
+
+chinese %>% 
+  anyNA()
+```
+
+
+```{r}
+chinese_results <- chinese%>% select(emotion) %>% 
+  bind_cols(loaded_tuned_model %>% 
+              predict(newdata = chinese))
+
+# Print predictions
+chinese_results %>% 
+  slice_head(n = 5)
+
+```
+
+```{r}
+# Confusion matrix
+#install.packages("yardstick")
+library(yardstick)
+chinese_results %>% 
+  conf_mat(emotion, ...2)
+```
+
+```{r}
+update_geom_defaults(geom = "tile", new = list(color = "black", alpha = 0.7))
+# Visualize confusion matrix
+chinese_results %>% 
+  conf_mat(emotion, ...2) %>% 
+  autoplot(type = "heatmap")
+```
+
+```{r}
+#Statistical summaries for the confusion matrix
+conf_mat(data = chinese_results, truth = emotion, estimate = ...2) %>% 
+  summary()
+
+```
+
+```{r}
+spanish <-read_csv("Spanish.csv")
+spanish = subset(spanish,select = -c(nationality,ID))
+spanish$emotion = as.factor(spanish$emotion)
+```
+
+```{r}
+loaded_tuned_model <- readRDS("tree_danish.rds") 
+```
+
+```{r}
+spanish <- spanish %>% 
+  drop_na()
+
+spanish %>% 
+  anyNA()
+```
+
+
+```{r}
+spanish_results <- spanish%>% select(emotion) %>% 
+  bind_cols(loaded_tuned_model %>% 
+              predict(newdata = spanish))
+
+# Print predictions
+spanish_results %>% 
+  slice_head(n = 5)
+
+```
+
+```{r}
+# Confusion matrix
+spanish_results %>% 
+  conf_mat(emotion, ...2)
+```
+
+```{r}
+update_geom_defaults(geom = "tile", new = list(color = "black", alpha = 0.7))
+# Visualize confusion matrix
+spanish_results %>% 
+  conf_mat(emotion, ...2) %>% 
+  autoplot(type = "heatmap")
+```
+
+```{r}
+#Statistical summaries for the confusion matrix
+conf_mat(data = spanish_results, truth = emotion, estimate = ...2) %>% 
+  summary()
+
+```
+
+```{r}
+english <-read_csv("English.csv")
+english = subset(english,select = -c(nationality,ID))
+english$emotion = as.factor(english$emotion)
+```
+
+```{r}
+loaded_tuned_model <- readRDS("tree_danish.rds") 
+```
+
+```{r}
+english <- english %>% 
+  drop_na()
+
+english %>% 
+  anyNA()
+```
+
+
+```{r}
+english_results <- english%>% select(emotion) %>% 
+  bind_cols(loaded_tuned_model %>% 
+              predict(newdata = english)) 
+
+# Print predictions
+english_results %>% 
+  slice_head(n = 5)
+
+```
+
+```{r}
+# Confusion matrix
+english_results %>% 
+  conf_mat(emotion, ...2)
+```
+
+```{r}
+update_geom_defaults(geom = "tile", new = list(color = "black", alpha = 0.7))
+# Visualize confusion matrix
+english_results %>% 
+  conf_mat(emotion, ...2) %>% 
+  autoplot(type = "heatmap")
+```
+
+```{r}
+#Statistical summaries for the confusion matrix
+conf_mat(data = english_results, truth = emotion, estimate = ...2) %>% 
+  summary()
+
+```
+
+```{r}
+data = subset(danish, select=c("duration","duration_noSilence","amEnvDep_sd","fmPurity_sd","emotion"))
+#install.packages("ggplot2")
+library(ggplot2)
+library(devtools)
+#install_github("ggobi/ggally")
+library(GGally)
+ggpairs(data)
+
+```

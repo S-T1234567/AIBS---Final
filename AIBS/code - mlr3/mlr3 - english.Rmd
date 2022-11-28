@@ -231,7 +231,6 @@ print('Neural Network');print(res_nn$aggregate(mes))
 ```
 
 ```{r}
-
 library(parallel)
 detectCores()
 cores = detectCores() - 1 # save one core to keep the computer operational
@@ -251,3 +250,203 @@ autoplot(bm_classif, measure = msr("classif.ce"))
 ```{r}
 autoplot(bm_classif, measure = msr("classif.acc"))
 ```
+```{r}
+library(mlr3verse)
+library(rpart.plot)
+library(paradox)
+library(future)
+set.seed(2022)
+learner = lrn("classif.rpart",
+  cp        = to_tune(0.01,0.1),
+  minsplit  = to_tune(2, 20),
+  maxdepth  = to_tune(10,20)
+)
+
+at = auto_tuner(
+  method = tnr("random_search"),
+  learner = learner,
+  resampling = rsmp("cv", folds = 3),
+  measure = msr("classif.acc"),
+  terminator = trm("evals", n_evals = 20)
+)
+
+task = task_english
+outer_resampling = rsmp("cv", folds = 3)
+
+rr = resample(task, at, outer_resampling, store_models = TRUE)
+extract_inner_tuning_results(rr)
+rr$aggregate()
+at$train(task_english)
+```
+
+
+```{r}
+saveRDS(at,"tree_english.rds")
+chinese <-read_csv("Chinese.csv",show_col_types = FALSE)
+chinese = subset(chinese,select = -c(nationality,ID))
+chinese$emotion = as.factor(chinese$emotion)
+```
+
+```{r}
+loaded_tuned_model <- readRDS("tree_english.rds") 
+```
+
+```{r}
+chinese <- chinese %>% 
+  drop_na()
+
+chinese %>% 
+  anyNA()
+```
+
+
+```{r}
+chinese_results <- chinese%>% select(emotion) %>% 
+  bind_cols(loaded_tuned_model %>% 
+              predict(newdata = chinese))
+
+# Print predictions
+chinese_results %>% 
+  slice_head(n = 5)
+
+```
+
+```{r}
+# Confusion matrix
+#install.packages("yardstick")
+library(yardstick)
+chinese_results %>% 
+  conf_mat(emotion, ...2)
+```
+
+```{r}
+update_geom_defaults(geom = "tile", new = list(color = "black", alpha = 0.7))
+# Visualize confusion matrix
+chinese_results %>% 
+  conf_mat(emotion, ...2) %>% 
+  autoplot(type = "heatmap")
+```
+
+```{r}
+#Statistical summaries for the confusion matrix
+conf_mat(data = chinese_results, truth = emotion, estimate = ...2) %>% 
+  summary()
+
+```
+
+```{r}
+spanish <-read_csv("Spanish.csv")
+spanish = subset(spanish,select = -c(nationality,ID))
+spanish$emotion = as.factor(spanish$emotion)
+```
+
+```{r}
+loaded_tuned_model <- readRDS("tree_english.rds") 
+```
+
+```{r}
+spanish <- spanish %>% 
+  drop_na()
+
+spanish %>% 
+  anyNA()
+```
+
+
+```{r}
+spanish_results <- spanish%>% select(emotion) %>% 
+  bind_cols(loaded_tuned_model %>% 
+              predict(newdata = spanish))
+
+# Print predictions
+spanish_results %>% 
+  slice_head(n = 5)
+
+```
+
+```{r}
+# Confusion matrix
+spanish_results %>% 
+  conf_mat(emotion, ...2)
+```
+
+```{r}
+update_geom_defaults(geom = "tile", new = list(color = "black", alpha = 0.7))
+# Visualize confusion matrix
+spanish_results %>% 
+  conf_mat(emotion, ...2) %>% 
+  autoplot(type = "heatmap")
+```
+
+```{r}
+#Statistical summaries for the confusion matrix
+conf_mat(data = spanish_results, truth = emotion, estimate = ...2) %>% 
+  summary()
+
+```
+
+```{r}
+danish <-read_csv("Danish.csv")
+danish = subset(danish,select = -c(nationality,ID))
+danish$emotion = as.factor(danish$emotion)
+```
+
+```{r}
+loaded_tuned_model <- readRDS("tree_english.rds") 
+```
+
+```{r}
+danish <- danish %>% 
+  drop_na()
+
+danish %>% 
+  anyNA()
+```
+
+
+```{r}
+danish_results <- danish%>% select(emotion) %>% 
+  bind_cols(loaded_tuned_model %>% 
+              predict(newdata = danish)) 
+
+# Print predictions
+danish_results %>% 
+  slice_head(n = 5)
+
+```
+
+```{r}
+# Confusion matrix
+danish_results %>% 
+  conf_mat(emotion, ...2)
+```
+
+```{r}
+update_geom_defaults(geom = "tile", new = list(color = "black", alpha = 0.7))
+# Visualize confusion matrix
+danish_results %>% 
+  conf_mat(emotion, ...2) %>% 
+  autoplot(type = "heatmap")
+```
+
+```{r}
+#Statistical summaries for the confusion matrix
+conf_mat(data = danish_results, truth = emotion, estimate = ...2) %>% 
+  summary()
+
+```
+
+
+```{r}
+data = subset(english, select=c("duration","duration_noSilence","flux_mean","peakFreq_mean","peakFreqVoiced_mean","emotion"))
+#install.packages("ggplot2")
+library(ggplot2)
+library(devtools)
+#install_github("ggobi/ggally")
+library(GGally)
+ggpairs(data)
+
+
+```
+
+

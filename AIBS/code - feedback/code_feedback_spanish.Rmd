@@ -1,0 +1,102 @@
+---
+title: "code-feedback"
+author: "jingxuan song"
+date: "`r Sys.Date()`"
+output: html_document
+---
+```{r}
+library(ggplot2)
+library(patchwork)
+library(readr)
+library(MASS)
+library(caTools)
+library(mlr3verse)
+#install.packages("iml")
+library(iml)
+library(mlr3)
+library(mlr3learners)
+library(dplyr)
+library(tidyverse)
+```
+
+```{r}
+library(parallel)
+detectCores()
+cores = detectCores() - 1
+```
+
+```{r}
+library(future)
+plan("multisession",workers = cores)
+set.seed(2022,kind = "L'Ecuyer-CMRG")
+```
+
+```{r}
+spanish <-read_csv("Spanish.csv",show_col_types = FALSE)
+spanish = subset(spanish, select = -c(nationality))
+spanish$emotion = as.factor(spanish$emotion)
+spanish <- spanish %>% drop_na()
+```
+
+
+```{r}
+spanish.pr <- prcomp(spanish[c(1:163)], center = TRUE,scale. = TRUE)
+summary(spanish.pr)
+```
+
+```{r}
+screeplot(spanish.pr, type = "l", npcs = 25, main = "Screeplot of the first 20 PCs")
+abline(h = 1, col="red", lty=5)
+legend("topright", legend=c("Eigenvalue = 1"),
+       col=c("red"), lty=5, cex=0.6)
+
+cumpro <- cumsum(spanish.pr$sdev^2 / sum(spanish.pr$sdev^2))
+plot(cumpro[0:25], xlab = "PC #", ylab = "Amount of explained variance", main = "Cumulative variance plot")
+abline(v = 6, col="blue", lty=5)
+abline(h = 0.9, col="blue", lty=5)
+legend("topleft", legend=c("Cut-off @ PC6"),
+       col=c("blue"), lty=5, cex=0.6)
+```
+We notice is that the first 20 components has an Eigenvalue >1 and explains more than 90% of variance, this is great! We can effectively reduce dimensionality from 163 to 20 while only “loosing” about 10% of variance!
+
+```{r}
+components <- cbind(emotion = spanish[, "emotion"], spanish.pr$x[, 1:8]) %>%
+as.data.frame()
+```
+
+```{r}
+# Task definition
+task_spanish = TaskClassif$new(id = "spanish", backend = spanish, 
+  target = "emotion")
+rdesc = rsmp("cv", folds = 3)
+mes = msrs(c("classif.ce","classif.acc"))
+
+task_spanish_pca = TaskClassif$new(id = "spanish", backend = components, 
+  target = "emotion")
+```
+
+
+```{r}
+library(parallel)
+detectCores()
+cores = detectCores() - 1 # save one core to keep the computer operational
+library(future)
+
+plan("multisession", workers = cores)
+set.seed(2022)
+featureless = lrn("classif.featureless",predict_type = "prob") 
+lasso = lrn("classif.cv_glmnet", s = "lambda.min", alpha = 1)
+tree = lrn("classif.rpart") 
+rf = lrn("classif.ranger",num.trees = 500) 
+knn = lrn("classif.kknn") 
+nb = lrn("classif.naive_bayes") 
+nn = lrn("classif.nnet") 
+
+design_classif = benchmark_grid(
+  tasks = task_spanish_pca,
+  learners = list(featureless, lasso, tree, rf, knn, nb, nn),
+  resamplings = rdesc)
+bm_classif = benchmark(design_classif)
+plan('sequential')
+autoplot(bm_classif, measure = msr("classif.acc"))
+```

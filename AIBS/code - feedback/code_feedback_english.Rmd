@@ -33,7 +33,7 @@ set.seed(2022,kind = "L'Ecuyer-CMRG")
 
 ```{r}
 english <-read_csv("English.csv",show_col_types = FALSE)
-english = subset(english, select = -c(nationality))
+english = subset(english, select = -c(nationality,ID))
 english$emotion = as.factor(english$emotion)
 english <- english %>% drop_na()
 ```
@@ -100,3 +100,23 @@ bm_classif = benchmark(design_classif)
 plan('sequential')
 autoplot(bm_classif, measure = msr("classif.acc"))
 ```
+
+```{r}
+#install.packages("randomForest")
+#install.packages("varImp")
+library(caret)
+library(randomForest)
+library(varImp)
+regressor <- randomForest(emotion ~ . , data = english, importance=TRUE) # fit the random forest with default parameter
+
+varImpPlot(regressor)
+```
+
+```{r}
+
+english.cf = cforest(emotion ~ ., data = english ,control = cforest_unbiased(mtry = 2, ntree = 50))
+set.seed(2022)
+varImp(object = english.cf,conditional = TRUE)
+```
+
+

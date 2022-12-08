@@ -52,27 +52,29 @@ legend("topright", legend=c("Eigenvalue = 1"),
 
 cumpro <- cumsum(spanish.pr$sdev^2 / sum(spanish.pr$sdev^2))
 plot(cumpro[0:25], xlab = "PC #", ylab = "Amount of explained variance", main = "Cumulative variance plot")
-abline(v = 6, col="blue", lty=5)
+abline(v = 8, col="blue", lty=5)
 abline(h = 0.9, col="blue", lty=5)
-legend("topleft", legend=c("Cut-off @ PC6"),
+legend("topleft", legend=c("Cut-off @ PC8"),
        col=c("blue"), lty=5, cex=0.6)
 ```
 We notice is that the first 20 components has an Eigenvalue >1 and explains more than 90% of variance, this is great! We can effectively reduce dimensionality from 163 to 20 while only “loosing” about 10% of variance!
 
 ```{r}
-components <- cbind(emotion = spanish[, "emotion"], spanish.pr$x[, 1:8]) %>%
+components <- cbind(emotion = spanish[, "emotion"], ID = spanish[,"ID"],spanish.pr$x[, 1:8]) %>%
 as.data.frame()
 ```
 
 ```{r}
 # Task definition
-task_spanish = TaskClassif$new(id = "spanish", backend = spanish, 
-  target = "emotion")
-rdesc = rsmp("cv", folds = 3)
+
+rdesc = rsmp("repeated_cv", repeats = 10,folds = 5)
 mes = msrs(c("classif.ce","classif.acc"))
 
 task_spanish_pca = TaskClassif$new(id = "spanish", backend = components, 
   target = "emotion")
+
+task_spanish_pca$col_roles$group = "ID"
+task_spanish_pca$col_roles$feature = setdiff(task_spanish_pca$col_roles$feature, "ID")
 ```
 
 
@@ -85,7 +87,7 @@ library(future)
 plan("multisession", workers = cores)
 set.seed(2022)
 featureless = lrn("classif.featureless",predict_type = "prob") 
-lasso = lrn("classif.cv_glmnet", s = "lambda.min", alpha = 1)
+lasso = lrn("classif.glmnet", alpha = 1)
 tree = lrn("classif.rpart") 
 rf = lrn("classif.ranger",num.trees = 500) 
 knn = lrn("classif.kknn") 
@@ -95,6 +97,7 @@ nn = lrn("classif.nnet")
 design_classif = benchmark_grid(
   tasks = task_spanish_pca,
   learners = list(featureless, lasso, tree, rf, knn, nb, nn),
+  #learners = list(featureless, tree, knn, nb, nn),
   resamplings = rdesc)
 bm_classif = benchmark(design_classif)
 plan('sequential')

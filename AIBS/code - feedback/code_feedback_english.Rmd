@@ -33,7 +33,7 @@ set.seed(2022,kind = "L'Ecuyer-CMRG")
 
 ```{r}
 english <-read_csv("English.csv",show_col_types = FALSE)
-english = subset(english, select = -c(nationality,ID))
+english = subset(english, select = -c(nationality))
 english$emotion = as.factor(english$emotion)
 english <- english %>% drop_na()
 ```
@@ -45,34 +45,35 @@ summary(english.pr)
 ```
 
 ```{r}
-screeplot(english.pr, type = "l", npcs = 25, main = "Screeplot of the first 20 PCs")
+screeplot(english.pr, type = "l", npcs = 25, main = "Screeplot of the first 25 PCs")
 abline(h = 1, col="red", lty=5)
 legend("topright", legend=c("Eigenvalue = 1"),
        col=c("red"), lty=5, cex=0.6)
 
 cumpro <- cumsum(english.pr$sdev^2 / sum(english.pr$sdev^2))
 plot(cumpro[0:25], xlab = "PC #", ylab = "Amount of explained variance", main = "Cumulative variance plot")
-abline(v = 6, col="blue", lty=5)
+abline(v = 17, col="blue", lty=5)
 abline(h = 0.9, col="blue", lty=5)
-legend("topleft", legend=c("Cut-off @ PC6"),
+legend("topleft", legend=c("Cut-off @ PC17"),
        col=c("blue"), lty=5, cex=0.6)
 ```
-We notice is that the first 20 components has an Eigenvalue >1 and explains more than 90% of variance, this is great! We can effectively reduce dimensionality from 163 to 20 while only “loosing” about 10% of variance!
+We notice is that the first 17 components explains more than 90% of variance, this is great! We can effectively reduce dimensionality from 165 to 17 while only “loosing” about 10% of variance!
 
 ```{r}
-components <- cbind(emotion = english[, "emotion"], english.pr$x[, 1:20]) %>%
+components <- cbind(emotion = english[, "emotion"], ID = english[,"ID"], english.pr$x[, 1:17]) %>%
 as.data.frame()
 ```
 
 ```{r}
 # Task definition
-task_english = TaskClassif$new(id = "English", backend = english, 
-  target = "emotion")
-rdesc = rsmp("cv", folds = 3)
+rdesc = rsmp("repeated_cv",repeats = 10, folds = 5)
 mes = msrs(c("classif.ce","classif.acc"))
 
 task_english_pca = TaskClassif$new(id = "English", backend = components, 
   target = "emotion")
+task_english_pca$col_roles$group = "ID"
+task_english_pca$col_roles$feature = setdiff(task_english_pca$col_roles$feature, "ID")
+
 ```
 
 
@@ -85,7 +86,7 @@ library(future)
 plan("multisession", workers = cores)
 set.seed(2022)
 featureless = lrn("classif.featureless",predict_type = "prob") 
-lasso = lrn("classif.cv_glmnet", s = "lambda.min", alpha = 1)
+lasso = lrn("classif.glmnet",  alpha = 1)
 tree = lrn("classif.rpart") 
 rf = lrn("classif.ranger",num.trees = 500) 
 knn = lrn("classif.kknn") 
@@ -113,10 +114,10 @@ varImpPlot(regressor)
 ```
 
 ```{r}
-
 english.cf = cforest(emotion ~ ., data = english ,control = cforest_unbiased(mtry = 2, ntree = 50))
 set.seed(2022)
 varImp(object = english.cf,conditional = TRUE)
+
 ```
 
 

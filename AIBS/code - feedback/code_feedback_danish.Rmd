@@ -45,34 +45,36 @@ summary(danish.pr)
 ```
 
 ```{r}
-screeplot(danish.pr, type = "l", npcs = 25, main = "Screeplot of the first 20 PCs")
+screeplot(danish.pr, type = "l", npcs = 25, main = "Screeplot of the first 25 PCs")
 abline(h = 1, col="red", lty=5)
 legend("topright", legend=c("Eigenvalue = 1"),
        col=c("red"), lty=5, cex=0.6)
 
 cumpro <- cumsum(danish.pr$sdev^2 / sum(danish.pr$sdev^2))
 plot(cumpro[0:25], xlab = "PC #", ylab = "Amount of explained variance", main = "Cumulative variance plot")
-abline(v = 6, col="blue", lty=5)
+abline(v = 12, col="blue", lty=5)
 abline(h = 0.9, col="blue", lty=5)
-legend("topleft", legend=c("Cut-off @ PC6"),
+legend("topleft", legend=c("Cut-off @ PC12"),
        col=c("blue"), lty=5, cex=0.6)
 ```
 We notice is that the first 20 components has an Eigenvalue >1 and explains more than 90% of variance, this is great! We can effectively reduce dimensionality from 163 to 20 while only “loosing” about 10% of variance!
 
 ```{r}
-components <- cbind(emotion = danish[, "emotion"], danish.pr$x[, 1:15]) %>%
+components <- cbind(emotion = danish[, "emotion"],ID=danish[,"ID"], danish.pr$x[, 1:12]) %>%
 as.data.frame()
 ```
 
 ```{r}
 # Task definition
-task_danish = TaskClassif$new(id = "danish", backend = danish, 
-  target = "emotion")
-rdesc = rsmp("cv",folds = 3)
+
+rdesc = rsmp("repeated_cv", repeats = 10,folds = 5)
 mes = msrs(c("classif.ce","classif.acc"))
 
 task_danish_pca = TaskClassif$new(id = "danish", backend = components, 
   target = "emotion")
+
+task_danish_pca$col_roles$group = "ID"
+task_danish_pca$col_roles$feature = setdiff(task_danish_pca$col_roles$feature, "ID")
 ```
 
 
@@ -85,7 +87,7 @@ library(future)
 plan("multisession", workers = cores)
 set.seed(2022)
 featureless = lrn("classif.featureless",predict_type = "prob") 
-lasso = lrn("classif.cv_glmnet", s = "lambda.min", alpha = 1)
+lasso = lrn("classif.glmnet", alpha = 1)
 tree = lrn("classif.rpart") 
 rf = lrn("classif.ranger",num.trees = 500) 
 knn = lrn("classif.kknn") 
